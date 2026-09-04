@@ -9,3 +9,5 @@
 # Temporary files
 *~
 *.swp
+
+.vscode
