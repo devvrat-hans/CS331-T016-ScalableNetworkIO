@@ -1,0 +1,11 @@
+# Object and binary files
+*.o
+*.out
+*.exe
+
+# macOS metadata
+.DS_Store
+
+# Temporary files
+*~
+*.swp
