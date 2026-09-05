@@ -60,6 +60,9 @@ typedef struct {
     unsigned long long bytes_received;
     unsigned long long bytes_sent;
 
+    unsigned long enter_calls;
+    unsigned long total_cqes;
+
 } stats_t;
 
 /*
@@ -131,8 +134,17 @@ static int submit_recv(struct io_uring *ring, client_t *client) {
     sqe = io_uring_get_sqe(ring);
 
     if (!sqe) {
-        fprintf(stderr, "Failed to get SQE for RECV\n");
-        return -1;
+        if (io_uring_submit(ring) < 0) {
+            fprintf(stderr, "Failed to submit pending SQEs for RECV\n");
+            return -1;
+        }
+
+        sqe = io_uring_get_sqe(ring);
+
+        if (!sqe) {
+            fprintf(stderr, "Failed to get SQE for RECV after retry\n");
+            return -1;
+        }
     }
 
     // Remember which operation is currently outstanding.
@@ -160,8 +172,17 @@ static int submit_send(struct io_uring *ring, client_t *client) {
     sqe = io_uring_get_sqe(ring);
 
     if (!sqe) {
-        fprintf(stderr, "Failed to get SQE for SEND\n");
-        return -1;
+        if (io_uring_submit(ring) < 0) {
+            fprintf(stderr, "Failed to submit pending SQEs for SEND\n");
+            return -1;
+        }
+
+        sqe = io_uring_get_sqe(ring);
+
+        if (!sqe) {
+            fprintf(stderr, "Failed to get SQE for SEND after retry\n");
+            return -1;
+        }
     }
 
     // Remember which operation is currently outstanding.
@@ -336,6 +357,7 @@ int main(void) {
          * submission queue and wait for at least one
          * completion.
          */
+        stats.enter_calls++;
 
         ret = io_uring_submit_and_wait(&ring, 1);
 
@@ -356,6 +378,8 @@ int main(void) {
         unsigned count = 0;
 
         io_uring_for_each_cqe(&ring,head,cqe) {
+            stats.total_cqes++;
+
             /*
              * Retrieve the user_data that was stored
              * when the SQE was prepared.
@@ -439,8 +463,6 @@ int main(void) {
 
                 continue;
             }
-
-            // RECV / SEND COMPLETION
 
             // RECV and SEND store client_t* directly in user_data.
             client_t *client = data;
@@ -619,15 +641,19 @@ int main(void) {
 
     printf("\n========== Statistics ==========\n");
 
-    printf("Connections:     %lu\n",stats.connections);
+    printf("Connections:                %lu\n",stats.connections);
 
-    printf("RECV operations: %lu\n",stats.recv_ops);
+    printf("RECV operations:            %lu\n",stats.recv_ops);
 
-    printf("SEND operations: %lu\n",stats.send_ops);
+    printf("SEND operations:            %lu\n",stats.send_ops);
 
-    printf("Bytes received:  %llu\n",stats.bytes_received);
+    printf("Bytes received:             %llu\n",stats.bytes_received);
 
-    printf("Bytes sent:      %llu\n",stats.bytes_sent);
+    printf("Bytes sent:                 %llu\n",stats.bytes_sent);
+
+    printf("io_uring enter calls:       %lu\n",stats.enter_calls);
+
+    printf("Total CQEs:                 %lu\n",stats.total_cqes);
 
     printf("================================\n");
 
