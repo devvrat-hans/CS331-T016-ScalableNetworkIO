@@ -12,10 +12,12 @@
  * - Reserved idle_fd is closed/reopened on EMFILE/ENFILE so the process
  *   can still accept-and-drop instead of spinning when out of fds
  * - Doubly-linked connection list for O(1) insert/remove on churn
- * - EPOLLRDHUP marks peer_closed only *after* attempting the read for
- *   that same event, so a final "data + close" packet is still echoed
+ * - peer_closed is set ONLY when read() returns 0. EPOLLRDHUP fires as
+ *   soon as the peer's FIN arrives even if data is still buffered, so
+ *   it is never used to infer close: level-triggered epoll keeps the
+ *   fd readable until the buffer is actually drained down to EOF.
  */
-
+ 
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +34,7 @@
 
 #define DEFAULT_PORT 9090
 #define BACKLOG 128
-#define MAX_EVENTS 64
+#define MAX_EVENTS 1024
 #define BUFFER_SIZE 4096
 #define MAX_ACCEPTS_PER_CYCLE 64
 
@@ -85,6 +87,12 @@ int main(int argc, char *argv[])
     uint64_t total_bytes = 0;
     uint64_t total_reads = 0;
     int active_connections = 0;
+
+    /* raw syscall counters, for the benchmarker's syscalls/message metric */
+    uint64_t epoll_wait_calls = 0;
+    uint64_t epoll_ctl_calls = 0;
+    uint64_t read_calls = 0;
+    uint64_t write_calls = 0;
 
     if (argc > 1) {
         char *endptr;
@@ -145,6 +153,7 @@ int main(int argc, char *argv[])
 
     ev.events = EPOLLIN;
     ev.data.ptr = &listener_conn;
+    epoll_ctl_calls++;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
         perror("epoll_ctl: server_fd");
         close(server_fd);
@@ -156,6 +165,7 @@ int main(int argc, char *argv[])
 
     while (running) {
         int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
+        epoll_wait_calls++;
 
         if (n == -1) {
             if (errno == EINTR) continue;
@@ -203,6 +213,7 @@ int main(int argc, char *argv[])
                     cev.events = nc -> registered_events;
                     cev.data.ptr = nc;
 
+                    epoll_ctl_calls++;
                     if (epoll_ctl(epfd, EPOLL_CTL_ADD, client_fd, &cev) == -1) {
                         perror("epoll_ctl: client_fd");
                         close(client_fd);
@@ -222,6 +233,7 @@ int main(int argc, char *argv[])
                 ssize_t r;
                 do {
                     r = read(c -> fd, c -> buffer, BUFFER_SIZE);
+                    read_calls++;
                 } while (r == -1 && errno == EINTR);
 
                 if (r > 0) {
@@ -235,15 +247,11 @@ int main(int argc, char *argv[])
                 }
             }
 
-            /* mark half-close only after the read above has been attempted,
-             * so a final "data + FIN" event still gets echoed */
-            if (events[i].events & EPOLLRDHUP)
-                c -> peer_closed = 1;
-
             if (c -> bytes_to_write > 0) {
                 while (c -> write_pos < c -> bytes_to_write) {
                     ssize_t w = write(c -> fd, c -> buffer + c -> write_pos,
                                       c -> bytes_to_write - c -> write_pos);
+                    write_calls++;
 
                     if (w > 0) {
                         c -> write_pos += (size_t)w;
@@ -280,6 +288,7 @@ int main(int argc, char *argv[])
                     mev.events = desired;
                     mev.data.ptr = c;
 
+                    epoll_ctl_calls++;
                     if (epoll_ctl(epfd, EPOLL_CTL_MOD, c -> fd, &mev) == -1) {
                         perror("epoll_ctl: MOD");
                         goto cleanup_conn;
@@ -291,6 +300,7 @@ int main(int argc, char *argv[])
 
         cleanup_conn:
             list_remove(c);
+            epoll_ctl_calls++;
             epoll_ctl(epfd, EPOLL_CTL_DEL, c -> fd, NULL);
             close(c -> fd);
             free(c);
@@ -306,11 +316,18 @@ int main(int argc, char *argv[])
     conn_t *cur = conn_list_head;
     while (cur) {
         conn_t *next = cur -> next;
+        epoll_ctl_calls++;
         epoll_ctl(epfd, EPOLL_CTL_DEL, cur -> fd, NULL);
         close(cur -> fd);
         free(cur);
         cur = next;
     }
+
+    /* CSV row for the benchmarker: same schema across all four engines.
+     * engine,port,active_connections,epoll_wait_calls,epoll_ctl_calls,read_calls,write_calls,total_bytes */
+    printf("CSV,epoll,%d,%d,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n",
+           port, active_connections, epoll_wait_calls, epoll_ctl_calls,
+           read_calls, write_calls, total_bytes);
 
     if (idle_fd != -1) close(idle_fd);
     close(server_fd);
