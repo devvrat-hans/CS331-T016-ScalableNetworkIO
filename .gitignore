@@ -2,6 +2,7 @@
 *.o
 *.out
 *.exe
+io_uring_echo_server
 
 # macOS metadata
 .DS_Store
@@ -10,4 +11,5 @@
 *~
 *.swp
 
-.vscode
+# VS Code
+.vscode/
