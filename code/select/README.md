@@ -80,17 +80,3 @@ peak_max_fd,fdset_bytes_per_call,syscalls_per_msg
 `fdset_bytes_per_call` is the bitmap volume crossing the syscall boundary on
 every `select()` — two sets copied in and back out — which grows with
 `peak_max_fd`: 8 bytes at `max_fd` 9, 512 bytes at `max_fd` 1023.
-
-## Deliberate Differences From the `poll` Engine
-
-Both are recorded here so they read as decisions rather than drift:
-
-1. **fd-indexed client array instead of a compact array with swap-compaction.**
-   Forced by the mechanism, as described above. It also avoids copying a whole
-   4 KB `client_t` on every disconnect.
-2. **A connection is never in the read and write sets simultaneously.** The poll
-   engine currently reads unconditionally on `POLLIN`, which overwrites data
-   still awaiting a write once `write()` starts returning `EAGAIN`. Everything
-   else — port, buffer size, backlog, socket options, read policy, compiler
-   flags — matches the poll engine exactly so the benchmark comparison stays
-   valid.
