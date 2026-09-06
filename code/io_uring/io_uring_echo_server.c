@@ -57,12 +57,14 @@ typedef struct {
     unsigned long recv_ops;
     unsigned long send_ops;
 
+    unsigned long zero_byte_recv;
+    unsigned long errors;
+
     unsigned long long bytes_received;
     unsigned long long bytes_sent;
 
     unsigned long enter_calls;
     unsigned long total_cqes;
-
 } stats_t;
 
 /*
@@ -107,13 +109,7 @@ static int submit_accept(struct io_uring *ring, int server_fd) {
     /*
      * Prepare MULTISHOT ACCEPT operation.
      */
-    io_uring_prep_multishot_accept(
-        sqe,
-        server_fd,
-        NULL,
-        NULL,
-        0
-    );
+    io_uring_prep_multishot_accept(sqe,server_fd,NULL,NULL,0);
 
     /*
      * ACCEPT does not have a client_t yet
@@ -151,13 +147,7 @@ static int submit_recv(struct io_uring *ring, client_t *client) {
     client->operation = OP_RECV;
 
     // Prepare RECV operation.
-    io_uring_prep_recv(
-        sqe,
-        client->fd,
-        client->buffer,
-        BUFFER_SIZE,
-        0
-    );
+    io_uring_prep_recv(sqe,client->fd,client->buffer,BUFFER_SIZE,0);
 
     // Store the client directly in user_data.
     io_uring_sqe_set_data(sqe, client);
@@ -189,13 +179,8 @@ static int submit_send(struct io_uring *ring, client_t *client) {
     client->operation = OP_SEND;
 
     // Send only the part of the buffer that has not already been sent.
-    io_uring_prep_send(
-        sqe,
-        client->fd,
-        client->buffer + client->send_pos,
-        client->send_len - client->send_pos,
-        0
-    );
+    io_uring_prep_send(sqe,client->fd,client->buffer + client->send_pos,
+        client->send_len - client->send_pos,0);
 
     // Store the client directly in user_data.
     io_uring_sqe_set_data(sqe, client);
@@ -260,12 +245,8 @@ int main(void) {
     // Allow quick restart after termination.
     int opt = 1;
 
-    if (setsockopt(
-            server_fd,
-            SOL_SOCKET,
-            SO_REUSEADDR,
-            &opt,
-            sizeof(opt)) == -1) {
+    if (setsockopt(server_fd,SOL_SOCKET,SO_REUSEADDR,
+            &opt,sizeof(opt)) == -1) {
 
         perror("setsockopt");
 
@@ -397,6 +378,7 @@ int main(void) {
                      * the interrupted ACCEPT as a normal error.
                      */
                     if (running) {
+                        stats.errors++;
                         fprintf(stderr,"ACCEPT failed: %s\n",strerror(-client_fd));
                     }
                 } else {
@@ -473,12 +455,8 @@ int main(void) {
 
                 // RECV failed.
                 if (bytes_received < 0) {
-                    fprintf(
-                        stderr,
-                        "RECV failed for FD %d: %s\n",
-                        client->fd,
-                        strerror(-bytes_received)
-                    );
+                    stats.errors++;
+                    fprintf(stderr,"RECV failed for FD %d: %s\n",client->fd,strerror(-bytes_received));
 
                     remove_client(&clients, client);
 
@@ -491,6 +469,8 @@ int main(void) {
 
                 //recv() returning 0 means that the client closed the connection
                 if (bytes_received == 0) {
+                    stats.zero_byte_recv++;
+
                     remove_client(&clients,client);
 
                     close(client->fd);
@@ -534,12 +514,8 @@ int main(void) {
                  * SEND failed.
                  */
                 if (bytes_sent < 0) {
-                    fprintf(
-                        stderr,
-                        "SEND failed for FD %d: %s\n",
-                        client->fd,
-                        strerror(-bytes_sent)
-                    );
+                    stats.errors++;
+                    fprintf(stderr,"SEND failed for FD %d: %s\n",client->fd,strerror(-bytes_sent));
 
                     remove_client(&clients,client);
 
@@ -639,23 +615,28 @@ int main(void) {
 
     // PRINT FINAL STATISTICS
 
-    printf("\n========== Statistics ==========\n");
+    printf(
+        "STAT "
+        "connections=%lu "
+        "recv_ops=%lu "
+        "send_ops=%lu "
+        "zero_byte_recv=%lu "
+        "total_cqes=%lu "
+        "errors=%lu "
+        "bytes_received=%llu "
+        "bytes_sent=%llu "
+        "enter_calls=%lu\n",
 
-    printf("Connections:                %lu\n",stats.connections);
-
-    printf("RECV operations:            %lu\n",stats.recv_ops);
-
-    printf("SEND operations:            %lu\n",stats.send_ops);
-
-    printf("Bytes received:             %llu\n",stats.bytes_received);
-
-    printf("Bytes sent:                 %llu\n",stats.bytes_sent);
-
-    printf("io_uring enter calls:       %lu\n",stats.enter_calls);
-
-    printf("Total CQEs:                 %lu\n",stats.total_cqes);
-
-    printf("================================\n");
+        stats.connections,
+        stats.recv_ops,
+        stats.send_ops,
+        stats.zero_byte_recv,
+        stats.total_cqes,
+        stats.errors,
+        stats.bytes_received,
+        stats.bytes_sent,
+        stats.enter_calls
+    );
 
     return 0;
 }

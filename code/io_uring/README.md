@@ -14,7 +14,9 @@ The server uses the `io_uring` submission/completion model and maintains indepen
 make
 ```
 
-or compile directly:
+The provided `Makefile` uses `pkg-config` to obtain the required `liburing` compiler and linker flags.
+
+Alternatively, compile directly:
 
 ```bash
 gcc io_uring_echo_server.c -o io_uring_echo_server -luring
@@ -156,20 +158,24 @@ For example:
 
 ```text
 Server
+
   │
   │ Submit RECV SQE
   ▼
 Kernel
+
   │
   │ waits for client data
   │
   │ data arrives
   ▼
 Kernel completes RECV
+
   │
   │ CQE
   ▼
 Server
+
   │
   │ Submit SEND SQE
   ▼
@@ -220,10 +226,10 @@ Conceptually:
           │     │     │
           ▼     ▼     ▼
        Client  Client  Client
-          1      2      3
-          │      │      │
-          ▼      ▼      ▼
-        CQE    CQE    CQE
+          1       2       3
+          │       │       │
+          ▼       ▼       ▼
+        CQE     CQE     CQE
 ```
 
 As long as `IORING_CQE_F_MORE` is present, the multishot accept operation remains active and can produce additional completions.
@@ -318,12 +324,43 @@ The server maintains runtime statistics including:
 * Number of client connections
 * Number of receive operations
 * Number of send operations
+* Number of zero-byte receive completions
+* Number of I/O errors
 * Total bytes received
 * Total bytes sent
 * Number of event-loop submit/wait calls
 * Total CQEs processed
 
-These statistics can be used to understand the server's workload and support performance analysis against other I/O mechanisms.
+When the server shuts down, the statistics are printed in a **machine-readable** format:
+
+```text
+STAT connections=... recv_ops=... send_ops=... zero_byte_recv=... total_cqes=... errors=... bytes_received=... bytes_sent=... enter_calls=...
+```
+
+These statistics can be collected from benchmark runs and used for performance analysis against the `select`, `poll`, and `epoll` implementations.
+
+The `enter_calls` value is an application-level count of event-loop submit/wait calls. It should not be interpreted as an exact count of every underlying `io_uring_enter` system call.
+
+## Single-Threaded Verification
+
+The server is designed as a **single-threaded** event-driven server. It does not create worker threads or one thread per client.
+
+While the server is running, the number of threads can be checked using:
+
+```bash
+ps -o pid,nlwp,cmd -C io_uring_echo_server
+```
+
+Example:
+
+```text
+    PID NLWP CMD
+  12345    1 ./io_uring_echo_server
+```
+
+`NLWP = 1` confirms that the process is using one thread.
+
+This remains true while multiple clients are connected because concurrency is provided by `io_uring`, not by creating additional application threads.
 
 ## Design Considerations
 
@@ -346,4 +383,5 @@ These statistics can be used to understand the server's workload and support per
 * It is a single-threaded implementation and does not use multiple worker threads.
 * The current server uses a fixed listening port of `9090`.
 * Performance characteristics depend on the Linux kernel, `liburing` version, workload, and system configuration.
+* The server uses a fixed buffer size of `4096` bytes per client.
 * The measured number of submit/wait calls is an application-level statistic and should not be interpreted as an exact count of every underlying `io_uring_enter` system call.
