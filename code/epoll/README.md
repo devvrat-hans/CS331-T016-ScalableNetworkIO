@@ -14,12 +14,12 @@ make
 ```bash
 ./epoll_echo_server
 ```
-The server listens on `0.0.0.0:9003` by default.
+The server listens on `0.0.0.0:9090` by default.
 
 ## Testing
 Connect using `nc` (netcat):
 ```bash
-nc 127.0.0.1 9003
+nc 127.0.0.1 9090
 ```
 Type any message and press Enter; the server will echo it back.
 

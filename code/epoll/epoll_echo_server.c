@@ -324,10 +324,10 @@ int main(int argc, char *argv[])
     }
 
     /* CSV row for the benchmarker: same schema across all four engines.
-     * engine,port,active_connections,epoll_wait_calls,epoll_ctl_calls,read_calls,write_calls,total_bytes */
-    printf("CSV,epoll,%d,%d,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n",
-           port, active_connections, epoll_wait_calls, epoll_ctl_calls,
-           read_calls, write_calls, total_bytes);
+     * engine,port,active_connections,messages,read_calls,write_calls,epoll_wait_calls,epoll_ctl_calls,total_bytes */
+    printf("CSV,epoll,%d,%d,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n",
+           port, active_connections, total_reads, read_calls, write_calls,
+           epoll_wait_calls, epoll_ctl_calls, total_bytes);
 
     if (idle_fd != -1) close(idle_fd);
     close(server_fd);

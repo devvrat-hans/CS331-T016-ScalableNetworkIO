@@ -6,7 +6,7 @@ CFLAGS = -Wall -Wextra -Wpedantic -O2
 all: epoll_echo_server
 
 epoll_echo_server: epoll_echo_server.c
-	$(CC) $(CFLAGS) -o $@ $
+	$(CC) $(CFLAGS) -o $@ $<
 
 clean:
 	rm -f epoll_echo_server
