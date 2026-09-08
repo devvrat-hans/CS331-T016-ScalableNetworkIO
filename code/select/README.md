@@ -62,8 +62,9 @@ Type any message and press Enter; the server will echo it back. Send `SIGINT`
   slots of work per iteration. `poll()` would cost 11.
 - Level-triggered only, and one `read()` per readiness event — anything left in
   the socket buffer re-notifies on the next iteration.
-- The `timeval` passed to `select()` is modified by Linux and must be reset every
-  iteration; `poll()` takes a plain `int` and has no equivalent hazard.
+- Blocks indefinitely on `select()` (`NULL` timeout) — there's no periodic
+  wakeup, so `select_calls` reflects actual I/O readiness events only, not
+  wall-clock idle time.
 
 ## Statistics Output
 

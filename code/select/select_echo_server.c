@@ -335,7 +335,6 @@ int main(int argc, char **argv)
 
     while (running) {
         fd_set rfds, wfds;
-        struct timeval tv;
         int ready, fd, scan_max;
 
         /* ---- PASS 1: rebuild. select() destroys the sets on every call. ---- */
@@ -352,17 +351,13 @@ int main(int argc, char **argv)
                 FD_SET(fd, &wfds);
         }
 
-        /*
-         * Linux writes the remaining time back into tv, so it has to be reset
-         * every iteration or the timeout decays to zero and this turns into a
-         * busy-poll. poll() takes a plain int and has no such hazard.
-         */
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+        /* NULL timeout: select() blocks indefinitely until an fd is ready.
+         * No periodic wakeups, so select_calls tracks I/O readiness events
+         * only, not wall-clock idle time. */
 
         /* ---- PASS 2: nfds is max_fd + 1, NOT a connection count. ---- */
         stats.select_calls++;
-        ready = select(max_fd + 1, &rfds, &wfds, NULL, &tv);
+        ready = select(max_fd + 1, &rfds, &wfds, NULL, NULL);
 
         if (ready == -1) {
             if (errno == EINTR)
