@@ -1,220 +1,371 @@
-# AI Integration: Thought Process and Workflow
+# Thought Process and Workflow
 
-## 1. Purpose of AI Use
+## Overview
 
-AI was integrated into the project primarily as an assistant for learning, analysis, drafting, review, and presentation preparation.
+My role in the project was Report and PPT preparation. The team separately handled the four server implementations and benchmarking. I used AI agents throughout my part of the project as learning, analysis, drafting, review, and formatting assistants.
 
-The student was responsible for the Report and PPT portions of the project. The implementations of select, poll, epoll, and io_uring were developed by the respective team members, while benchmarking was handled by the benchmarking team member.
+The main approach was not to treat the first AI response as the final answer. I generally followed an iterative process:
 
-AI was therefore used to understand and document the work produced by the team and to help turn the implementation and experimental results into a technically organized report and presentation.
+`Understand → Ask AI → Check against project material → Revise → Verify → Finalize`
 
----
-
-## 2. Initial Understanding
-
-The first stage was understanding the project requirements.
-
-The project required four single-threaded TCP echo servers using:
-
-- select
-- poll
-- epoll
-- io_uring
-
-It also required benchmarking at increasing connection counts and analysis of throughput, latency, system-call frequency, CPU usage, and memory behavior.
-
-AI was initially used to break the project description into individual technical requirements and explain concepts that were not yet fully understood.
-
-This stage was primarily educational. Different AI models were used to obtain explanations and alternative perspectives.
+AI was also used in preparing this `AI_Used` documentation itself. The purpose of this file is to document how AI was integrated into my workflow and how I verified the resulting material.
 
 ---
 
-## 3. Understanding the Team's Implementations
+## 1. Understanding the Project Requirements
 
-After obtaining the source code from the team members, AI was used to review the code and explain:
+The first stage was to understand exactly what the project expected.
 
-- How connections were accepted.
-- How readiness/completion was detected.
-- How data was read.
-- How echo responses were written.
-- How client state was stored.
-- What event-loop model each implementation used.
-- What implementation-specific limitations existed.
-- Which details were worth mentioning in the report.
+The project required the team to build and compare four single-threaded TCP echo servers using:
 
-The AI explanations were not accepted automatically. The source code was inspected manually and implementation details were discussed with the relevant team members where required.
+- `select`
+- `poll`
+- `epoll`
+- `io_uring`
 
-This was especially important because the project compared real implementations rather than generic textbook descriptions.
+The project also required benchmarking at increasing connection counts and analysis of throughput, latency, system-call frequency, CPU efficiency, and memory scalability.
+
+I used ChatGPT, Gemini, and Claude to break down the project description into practical requirements for the report and presentation.
+
+The initial questions were mainly educational. I wanted to understand what the professor was actually asking for and what concepts the report needed to demonstrate.
 
 ---
 
-## 4. Understanding Benchmark Results
+## 2. Learning the Technical Concepts
 
-The benchmark data was then examined to determine what the project could actually claim.
+Before writing the report, I used all three AI tools to learn the technical background required to explain the project.
 
-AI was used to inspect the available benchmark information and identify:
+The main concepts covered were:
 
-- Important trends.
-- Useful comparisons between mechanisms.
-- Suitable graphs.
-- Important system-call statistics.
-- Throughput changes with increasing concurrency.
-- Latency behavior.
+- Single-threaded TCP echo servers.
+- Socket readiness.
+- I/O multiplexing.
+- `select()`.
+- `poll()`.
+- `epoll()`.
+- `io_uring`.
+- Blocking versus non-blocking event loops.
+- Readiness notification versus asynchronous completion.
+- Descriptor scanning.
+- O(N) and O(max_fd) behaviour.
+- O(ready) behaviour.
+- Batched submission and completion.
+- System-call overhead.
+- User-to-kernel transitions.
+- Scaling with increasing connection counts.
+
+I asked the models to explain these concepts at different levels, especially where the implementation details were difficult to understand.
+
+Using more than one model was useful because different models sometimes explained the same mechanism differently. I compared the explanations and then used the one that was easiest to understand and most consistent with the project.
+
+---
+
+## 3. Understanding the Team's Code
+
+The four server implementations were written by the respective team members.
+
+My responsibility was not to replace those implementations, but I needed to understand them well enough to describe the system correctly in the report and PPT.
+
+I therefore used AI for code review and explanation.
+
+The workflow was:
+
+1. Obtain the implementation from the relevant team member.
+2. Provide the source code to the AI tool.
+3. Ask what the code is doing and what mechanism-specific details matter.
+4. Inspect the explanation against the actual source code.
+5. Ask the team member when an implementation detail was unclear.
+6. Keep only the details that were actually relevant to the final report or presentation.
+
+This process helped identify implementation-specific points instead of writing only generic descriptions of the Linux APIs.
+
+Examples of details that were useful in the final documentation included the `FD_SETSIZE` limit in the `select` implementation, the blocking behaviour of the event loops, the persistent interest list in `epoll`, and the submission/completion model used by `io_uring`.
+
+---
+
+## 4. Planning the Report
+
+Once the project and implementations were understood, I used AI to decide what a benchmarking report should contain.
+
+The first drafts were broader and included many sections.
+
+I then reviewed them against the actual project requirements and removed or condensed material that did not contribute much to the main benchmarking argument.
+
+The main areas retained were:
+
+- Project motivation.
+- Objectives and research questions.
+- System design and mechanism overview.
+- Experimental setup.
+- Benchmark methodology.
+- Throughput results.
+- Latency results.
+- System-call analysis.
 - CPU and memory observations.
-- Limitations and possible confounding factors.
+- Discussion of scaling behaviour.
+- Limitations.
+- Conclusion.
 
-The benchmark results were treated as the source of truth for numerical claims.
-
-AI was used to interpret the data, but measured values were checked against the actual benchmark output files.
+The aim was to make the report read as a comparison of the four mechanisms rather than as four unrelated implementation descriptions.
 
 ---
 
-## 5. Identifying Fairness and Measurement Issues
+## 5. Working with the Benchmark Results
 
-During report preparation, AI-assisted review helped identify places where the experimental methodology needed clarification or correction.
+Benchmarking was a separate team responsibility, but the resulting data was required for my report and PPT.
+
+I used AI, particularly Claude during this stage, to examine the supplied benchmark material and help determine:
+
+- Which measurements were important.
+- Which comparisons were meaningful.
+- Which graphs would communicate the results well.
+- Which trends should be discussed.
+- Which conclusions were supported by the measurements.
+- Which claims would be too strong.
+
+The workflow was not to ask AI to invent results. The actual benchmark output was provided to the models and the resulting values were checked against the source data.
+
+This was particularly important because the report contained both the main benchmark measurements and a separate supplementary profiling pass. I needed to preserve that distinction rather than mixing values from different experiments.
+
+---
+
+## 6. Identifying Problems and Improving the Experimental Discussion
+
+As the report was reviewed, several issues became important to the final version.
 
 Examples included:
 
-- Differences in blocking/timeout behavior.
-- The distinction between the main benchmark and supplementary profiling.
-- The fact that the original C client did not preserve individual latency samples and therefore could not produce true percentiles retrospectively.
-- The need to document CPU and memory measurements separately.
-- The need to document the test machine and software environment.
-- The importance of stating limitations such as loopback-only testing.
+- Different idle-timeout behaviour between implementations.
+- The distinction between total syscall counts and normalized syscall frequency.
+- The original client not retaining individual latency samples.
+- The need to distinguish the main five-repetition benchmark from supplementary profiling.
+- The need to document CPU, memory, and machine information.
+- The need to state loopback-only testing as a limitation.
+- The need to avoid claiming that `io_uring` is universally faster than `epoll` when the measured throughput did not support that claim.
 
-The final report incorporated these issues only after checking them against the actual project setup.
+AI was used to help identify and explain these issues, but the final wording was based on the actual experiment and project files.
 
-For example, the final report explicitly distinguishes the five-repetition core benchmark from the separate profiling pass used for true latency percentiles and resource measurements. 
-
----
-
-## 6. Drafting the Report
-
-AI was initially asked to generate an overall report structure and, later, larger sections of the report.
-
-The drafting process was iterative:
-
-1. Generate an initial structure.
-2. Check whether it covers the project requirements.
-3. Identify missing technical content.
-4. Add implementation-specific information.
-5. Insert the measured benchmark results.
-6. Add figures and tables.
-7. Add discussion and limitations.
-8. Review technical claims.
-9. Edit the language and organization.
-10. Produce the final version.
-
-The report was not treated as final when first generated by AI.
+The final report therefore presents the syscall reduction of `io_uring` as a strong architectural result while avoiding an unconditional claim of raw-throughput superiority.
 
 ---
 
-## 7. LaTeX Preparation
+## 7. Drafting the Report
 
-AI was also used to generate and modify the LaTeX source.
+After the structure was decided, AI was used to generate an initial report draft and later revise individual sections.
 
-This included:
+The drafting process was iterative.
 
-- Document structure.
-- Section organization.
-- Tables.
-- Figure placement.
-- Formatting.
-- Page-length adjustment.
-- Simplification of the preamble.
-- Corrections to LaTeX syntax.
+A typical cycle was:
 
-The resulting source was compiled and reviewed. Formatting decisions were made manually based on readability and the requirements of the project.
+1. Ask AI to draft a section.
+2. Read the generated section.
+3. Check whether the section actually matches the project.
+4. Compare numerical claims with benchmark data.
+5. Compare implementation claims with source code.
+6. Ask for revisions where necessary.
+7. Manually edit the resulting text.
+8. Move to the next section.
 
----
+This was repeated for the introduction, system design, methodology, results, discussion, limitations, and conclusion.
 
-## 8. Graph and Figure Preparation
-
-AI was used to suggest what measurements should be visualized and what types of graphs would best communicate the results.
-
-AI also generated plotting code for some of the figures.
-
-The plotting code was then run using the actual benchmark data. The resulting graphs were reviewed to ensure that:
-
-- They represented the correct measurements.
-- Axis labels were correct.
-- The values matched the source data.
-- The interpretation was consistent with the benchmark.
-- The figure was useful for the report or PPT.
+The AI therefore contributed substantially to drafting, but the final text was not simply copied without review.
 
 ---
 
-## 9. PPT Preparation
+## 8. Creating and Revising the LaTeX Report
 
-The PPT was produced from the report and project material.
+The report was prepared as a LaTeX document.
 
-AI was used to:
+AI assistance was used for:
 
-- Propose a slide structure.
-- Adapt the presentation to the professor's required format.
-- Condense report material into presentation-sized explanations.
-- Suggest diagrams and comparisons.
-- Identify which benchmark results should be highlighted.
-- Review the balance between technical explanation and results.
+- Creating the initial LaTeX structure.
+- Formatting sections and subsections.
+- Creating tables.
+- Placing figures.
+- Formatting captions.
+- Adjusting page length.
+- Simplifying the LaTeX preamble.
+- Fixing compilation errors.
+- Fixing alignment and formatting problems.
 
-The final PPT was manually edited after each AI-generated version. Content was retained, removed, or rewritten based on whether it was useful for the intended presentation.
+The generated LaTeX was compiled and checked. When a compilation or rendering problem appeared, it was sent back to the AI for diagnosis and correction.
 
----
+For example, the report generation process included checking missing packages, figure files, compiler compatibility, and table/figure formatting.
 
-## 10. Multiple AI Models and Selection
-
-Three AI systems were used:
-
-- ChatGPT Go
-- Gemini Pro
-- Claude Sonnet
-
-The same or similar questions were sometimes asked to more than one model.
-
-This allowed alternative explanations or structures to be compared.
-
-The final choice was made manually. AI outputs were not treated as automatically correct simply because multiple models produced similar answers.
+The final page count and rendered output were manually checked before submission.
 
 ---
 
-## 11. Final Review
+## 9. Creating Graphs and Figures
 
-Before finalizing the report and PPT, the material was checked against:
+AI was used to decide which benchmark measurements should be visualized.
 
-- The project description.
-- The actual source code.
-- The benchmark results.
-- The implementation details supplied by teammates.
-- Linux documentation where required.
-- The required presentation structure.
-- The internal consistency of tables, figures, and conclusions.
+It was also used to generate plotting code.
 
-This final review was important because some AI-generated explanations were too general or did not exactly represent the implementation being evaluated. Such content was modified or removed.
+The workflow was:
+
+`Actual benchmark data → AI-assisted plotting code → generated graph → manual inspection`
+
+The resulting graphs were checked for:
+
+- Correct values.
+- Correct connection counts.
+- Correct mechanism names.
+- Correct axis labels.
+- Correct units.
+- Consistency with the source data.
+- Consistency between the graph and the written discussion.
+
+The graphs were therefore generated from project data rather than from numbers generated by the AI.
 
 ---
 
-## Overall Workflow
+## 10. Preparing the PPT
 
-The overall AI-assisted workflow can be summarized as:
+The PPT was developed after the report had a stable set of results and conclusions.
 
-Project requirements
-        ↓
-AI-assisted learning
-        ↓
-Review of team source code
-        ↓
-Benchmark-data analysis
-        ↓
-Initial report/PPT drafts
-        ↓
-AI-assisted revision and formatting
-        ↓
-Manual technical verification
-        ↓
-Compile/run/review
-        ↓
-Manual editing and selection
-        ↓
-Final report and PPT
+AI was used first to review the existing presentation and then to reorganize it according to the professor's required structure:
 
-The central principle was that AI generated suggestions and drafts, while the student remained responsible for deciding what was technically correct and appropriate to submit.
+1. Problem Statement & Objectives
+2. Architecture / Mechanism
+3. Extension / Issues Fixed / Evaluation
+4. Non-Functional Testing Parameters
+5. Challenges Faced
+
+The “may extend one slide” allowance was used to keep the evaluation/results content readable while staying within the six-slide target that was later adopted.
+
+AI helped with:
+
+- Deciding what information could be moved from the report into slides.
+- Condensing long explanations.
+- Selecting important results.
+- Choosing which graphs should be shown.
+- Organizing the slides.
+- Reviewing readability and information density.
+
+After AI generated versions of the presentation, I made manual changes based on what I thought was appropriate for the final presentation.
+
+---
+
+## 11. Comparing AI Outputs
+
+For many learning and review tasks, I used more than one AI model.
+
+For example, I could ask ChatGPT, Gemini, and Claude to explain a mechanism or review a section.
+
+I then compared the outputs.
+
+The process was:
+
+`Multiple AI responses → compare → verify against source/project → keep useful content`
+
+A response was not accepted simply because multiple models gave a similar answer. The actual code and measurements remained the more important reference.
+
+---
+
+## 12. Verification and Final Decision-Making
+
+I used several forms of verification before accepting AI-assisted material.
+
+### Source-code verification
+
+Implementation descriptions were compared against the actual code.
+
+### Benchmark verification
+
+Numerical claims were compared against the benchmark outputs and result files.
+
+### Team verification
+
+Implementation details were checked with teammates when necessary.
+
+### Documentation verification
+
+Linux documentation and related technical documentation were consulted when needed for concepts or API behaviour.
+
+### Compilation and execution
+
+Generated LaTeX and plotting code were compiled or executed so that obvious technical or formatting errors could be detected.
+
+### Visual review
+
+The final report and PPT were reviewed after rendering rather than relying only on the source files.
+
+### Manual editing
+
+I made the final changes after AI generated or revised the report and PPT. This included deciding what to keep, what to remove, and what wording or presentation style to use.
+
+---
+
+## 13. Final Workflow
+
+The overall workflow for my Report/PPT role can be represented as follows:
+
+```text
+Project description
+        ↓
+Understand requirements with AI
+        ↓
+Learn select/poll/epoll/io_uring
+        ↓
+Study team implementations
+        ↓
+Collect and inspect benchmark outputs
+        ↓
+Decide what the report needs to show
+        ↓
+Generate initial report draft
+        ↓
+Check claims against code and measurements
+        ↓
+Revise report and LaTeX
+        ↓
+Generate/verify graphs
+        ↓
+Review final report
+        ↓
+Convert important material into PPT
+        ↓
+Review PPT against required structure
+        ↓
+Make final manual edits
+        ↓
+Final Report + PPT
+```
+
+---
+
+## 14. Role of AI in the Workflow
+
+The role of AI changed across the project.
+
+At the beginning, AI was used mostly as a learning tool.
+
+During the middle of the project, it became a drafting and analysis assistant.
+
+Later, it was used more as a reviewer and formatting assistant.
+
+A simplified view is:
+
+```text
+Early stage:
+Learning and understanding
+
+Middle stage:
+Drafting, analysis, LaTeX, graphs, report structure
+
+Final stage:
+Review, correction, formatting, PPT preparation
+```
+
+The important point was that the AI output was treated as a starting point or suggestion. The final material was selected and edited after checking it against the actual project work.
+
+---
+
+## 15. AI Assistance in Preparing This File
+
+This file is itself part of the AI_Used documentation and was also prepared with assistance from AI agents.
+
+AI was used to organize information from the project conversations and convert the workflow into a structured Markdown document.
+
+I reviewed the resulting document to ensure that it describes my actual use of AI and does not add activities that I did not perform.
