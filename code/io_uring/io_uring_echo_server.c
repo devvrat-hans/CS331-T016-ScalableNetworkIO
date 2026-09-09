@@ -35,8 +35,6 @@ typedef struct client {
     char buffer[BUFFER_SIZE];
 
     /*
-     * Sending state
-     *
      * send_pos = how many bytes have already been sent
      * send_len = total number of bytes that need to be sent
      */
@@ -48,7 +46,6 @@ typedef struct client {
 
     // Linked list pointer used for cleanup
     struct client *next;
-
 } client_t;
 
 // Statistics
@@ -68,10 +65,10 @@ typedef struct {
 } stats_t;
 
 /*
- * Special marker used to identify ACCEPT completions.
+ * Special marker used to identify ACCEPT completions
  *
  * ACCEPT is different from RECV/SEND because there is
- * no client_t yet when ACCEPT is submitted.
+ * no client_t yet when ACCEPT is submitted
  */
 static int accept_marker;
 
@@ -89,7 +86,6 @@ static void remove_client(client_t **clients, client_t *client) {
             *current = client->next;
             return;
         }
-
         current = &(*current)->next;
     }
 }
@@ -98,7 +94,7 @@ static void remove_client(client_t **clients, client_t *client) {
 static int submit_accept(struct io_uring *ring, int server_fd) {
     struct io_uring_sqe *sqe;
 
-    // Get an empty SQE.
+    // Get an empty SQE
     sqe = io_uring_get_sqe(ring);
 
     if (!sqe) {
@@ -106,15 +102,11 @@ static int submit_accept(struct io_uring *ring, int server_fd) {
         return -1;
     }
 
-    /*
-     * Prepare MULTISHOT ACCEPT operation.
-     */
+    // Prepare MULTISHOT ACCEPT operation
     io_uring_prep_multishot_accept(sqe,server_fd,NULL,NULL,0);
 
     /*
-     * ACCEPT does not have a client_t yet
-     *
-     * Therefore we use a special marker to identify
+     * ACCEPT does not have a client_t yet so we use a special marker to identify
      * ACCEPT completions later. The same marker is reused
      * for every completion from the multishot request.
      */
@@ -175,10 +167,10 @@ static int submit_send(struct io_uring *ring, client_t *client) {
         }
     }
 
-    // Remember which operation is currently outstanding.
+    // Remember which operation is currently outstanding
     client->operation = OP_SEND;
 
-    // Send only the part of the buffer that has not already been sent.
+    // Send only the part of the buffer that has not already been sent
     io_uring_prep_send(sqe,client->fd,client->buffer + client->send_pos,
         client->send_len - client->send_pos,0);
 
@@ -198,12 +190,7 @@ int main(void) {
     sa.sa_handler = handle_signal;
     sigemptyset(&sa.sa_mask);
 
-    /*
-     * Do not use SA_RESTART.
-     *
-     * This allows io_uring's wait to return when Ctrl+C
-     * interrupts it.
-     */
+    // This allows io_uring's wait to return when Ctrl+C interrupts it
     sa.sa_flags = 0;
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
@@ -216,12 +203,7 @@ int main(void) {
         return 1;
     }
 
-    /*
-     * Ignore SIGPIPE.
-     *
-     * Otherwise sending to a client that has already
-     * disconnected could terminate the entire process.
-     */
+    // Ignore SIGPIPE o/w sending to a client that has already disconnected could terminate the entire process
     struct sigaction ignore_pipe;
 
     memset(&ignore_pipe, 0, sizeof(ignore_pipe));
@@ -245,9 +227,7 @@ int main(void) {
     // Allow quick restart after termination.
     int opt = 1;
 
-    if (setsockopt(server_fd,SOL_SOCKET,SO_REUSEADDR,
-            &opt,sizeof(opt)) == -1) {
-
+    if (setsockopt(server_fd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt)) == -1) {
         perror("setsockopt");
 
         close(server_fd);
@@ -295,13 +275,11 @@ int main(void) {
 
     printf("io_uring initialized!\n");
 
-    
     // CLIENT LIST
     client_t *clients = NULL;
 
     // STATISTICS
     stats_t stats = {0};
-
 
     // PREPARE FIRST MULTISHOT ACCEPT
     if (submit_accept(&ring, server_fd) == -1) {
@@ -312,8 +290,6 @@ int main(void) {
     }
 
     /*
-     * Actually submit the initial multishot ACCEPT.
-     *
      * One submitted ACCEPT can now produce multiple
      * completions, so we do not need to submit a new
      * ACCEPT after every successful connection.
@@ -325,7 +301,6 @@ int main(void) {
 
         io_uring_queue_exit(&ring);
         close(server_fd);
-
         return 1;
     }
 
@@ -333,11 +308,7 @@ int main(void) {
 
     // MAIN EVENT LOOP
     while (running) {
-        /*
-         * Submit ALL SQEs currently waiting in the
-         * submission queue and wait for at least one
-         * completion.
-         */
+        // Submit ALL SQEs currently waiting in the submission queue and wait for at least one completion
         stats.enter_calls++;
 
         ret = io_uring_submit_and_wait(&ring, 1);
@@ -347,9 +318,7 @@ int main(void) {
             if (ret == -EINTR && !running) {
                 break;
             }
-
             fprintf(stderr,"io_uring_submit_and_wait failed: %s\n",strerror(-ret));
-
             break;
         }
 
@@ -361,56 +330,42 @@ int main(void) {
         io_uring_for_each_cqe(&ring,head,cqe) {
             stats.total_cqes++;
 
-            /*
-             * Retrieve the user_data that was stored
-             * when the SQE was prepared.
-             */
+            // Retrieve the user_data that was stored when the SQE was prepared
             void *data = io_uring_cqe_get_data(cqe);
 
             // ACCEPT COMPLETED
             if (data == &accept_marker) {
                 int client_fd = cqe->res;
 
-                // Check ACCEPT result.
+                // Check ACCEPT result
                 if (client_fd < 0) {
-                    /*
-                     * If shutdown is happening, don't report
-                     * the interrupted ACCEPT as a normal error.
-                     */
+                    // For shutdown the ACCEPT is not a normal error
                     if (running) {
                         stats.errors++;
                         fprintf(stderr,"ACCEPT failed: %s\n",strerror(-client_fd));
                     }
                 } else {
-                    // Allocate state for this client.
+                    // Allocate state for this client
                     client_t *client = calloc(1, sizeof(client_t));
 
                     if (!client) {
                         fprintf(stderr, "calloc failed\n");
-
                         close(client_fd);
                     } else {
                         client->fd = client_fd;
                         client->send_pos = 0;
                         client->send_len = 0;
 
-                        // Add client to our active-client list.
+                        // Add client to our active client list.
                         add_client(&clients, client);
 
                         // One successful connection.
                         stats.connections++;
 
                         /*
-                         * Prepare RECV.
-                         *
-                         * IMPORTANT:
-                         *
-                         * We do NOT call io_uring_submit()
-                         * here.
-                         *
-                         * The RECV will be submitted together
-                         * with other pending SQEs during the
-                         * next submit_and_wait().
+                         * Prepare RECV
+                         * We do NOT call io_uring_submit() here
+                         * The RECV will be submitted together with other pending SQEs during the next submit_and_wait().
                          */
                         if (submit_recv(&ring, client) == -1) {
                             remove_client(&clients,client);
@@ -423,15 +378,8 @@ int main(void) {
 
                 /*
                  * MULTISHOT ACCEPT
-                 *
-                 * If IORING_CQE_F_MORE is set, the original
-                 * ACCEPT request is still active. Therefore
-                 * we must NOT submit another ACCEPT here.
-                 *
-                 * If IORING_CQE_F_MORE is NOT set, the
-                 * multishot request has terminated. We then
-                 * re-arm it so the server can accept more
-                 * connections.
+                 * If IORING_CQE_F_MORE is set, the original ACCEPT request is still active. Therefor we must NOT submit another ACCEPT here.
+                 * If IORING_CQE_F_MORE is NOT set, the multishot request has terminated. We then re-arm it so the server can accept more connections.
                  */
                 if (running && !(cqe->flags & IORING_CQE_F_MORE)) {
                     if (submit_accept(&ring,server_fd) == -1) {
@@ -442,7 +390,6 @@ int main(void) {
                     }
                 }
                 count++;
-
                 continue;
             }
 
@@ -488,11 +435,7 @@ int main(void) {
                 client->send_pos = 0;
                 client->send_len = (size_t)bytes_received;
 
-                /*
-                 * Prepare SEND.
-                 *
-                 * Do NOT submit immediately.
-                 */
+                // Prepare SEND. Do NOT submit immediately
                 if (submit_send(&ring, client) == -1) {
                     remove_client(&clients,client);
 
@@ -510,9 +453,7 @@ int main(void) {
             if (client->operation == OP_SEND) {
                 int bytes_sent = cqe->res;
 
-                /*
-                 * SEND failed.
-                 */
+                // SEND FAILED
                 if (bytes_sent < 0) {
                     stats.errors++;
                     fprintf(stderr,"SEND failed for FD %d: %s\n",client->fd,strerror(-bytes_sent));
@@ -526,21 +467,14 @@ int main(void) {
                     continue;
                 }
 
-                // Update statistics.
+                // Update statistics
                 stats.send_ops++;
                 stats.bytes_sent += (unsigned long long)bytes_sent;
 
-                /*
-                 * Advance the send position.
-                 */
+                // Advance the send position
                 client->send_pos += (size_t)bytes_sent;
 
-                /*
-                 * Only part of the message was sent.
-                 *
-                 * Prepare another SEND for the
-                 * remaining bytes.
-                 */
+                // Only part of the message was sent. Prepare another SEND for the remaining bytes.
                 if (client->send_pos < client->send_len) {
                     if (submit_send(&ring,client) == -1) {
                         remove_client(&clients,client);
@@ -555,19 +489,11 @@ int main(void) {
                     continue;
                 }
 
-                /*
-                 * Entire message has been echoed.
-                 *
-                 * Reset send state
-                 */
+                // Entire message has been echoed. Reset send state
                 client->send_pos = 0;
                 client->send_len = 0;
 
-                /*
-                 * Prepare another RECV.
-                 *
-                 * Again, we do NOT submit immediately.
-                 */
+                // Prepare another RECV
                 if (submit_recv(&ring,client) == -1) {
                     remove_client(&clients,client);
 
@@ -583,12 +509,7 @@ int main(void) {
             count++;
         }
 
-        /*
-         * Tell io_uring that all processed CQEs have been consumed
-         *
-         * One call instead of cqe_seen() for every CQE.
-         */
-
+        // Tell io_uring that all processed CQEs have been consumed. One call instead of cqe_seen() for every CQE.
         io_uring_cq_advance(&ring,count);
     }
 
