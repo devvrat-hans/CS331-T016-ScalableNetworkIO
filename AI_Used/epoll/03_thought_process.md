@@ -1,0 +1,13 @@
+## Thought Process — How AI Was Integrated Into the Workflow
+
+The overall approach was **understand before building, verify before trusting**, not "generate code and submit it." Concretely:
+
+1. **Start at the conceptual foundation, not the API.** Before touching any code, I had Claude explain *why* select/poll/epoll/io_uring exist at all (the C10K problem, blocking vs non-blocking I/O, readiness vs completion models) before explaining what any specific syscall does. This matched a "why before what" learning approach throughout.
+2. **Use AI to plan team coordination, not just individual code.** Since the project is a 6-person group deliverable, I had Claude work out how to split the four-mechanism-plus-benchmarking-plus-report project into 6 genuinely parallel, non-blocking tasks, including the shared contract (port, protocol, metrics format) needed to make that parallelism actually work.
+3. **Build incrementally, one subtask at a time, understanding before coding.** Rather than asking for the whole `epoll_echo_server.c` file in one shot, the implementation was broken into 10 subtasks (socket setup -> non-blocking mode -> epoll instance creation -> per-connection state design -> event loop skeleton -> accept handling -> read/echo with partial-write handling -> cleanup -> metrics/shutdown -> testing), each explained (why it exists, what could go wrong) before any code was written for it.
+4. **Cross-reference against a teammate's working implementation.** A teammate's `poll_echo_server.c` was used as a style/structure reference so all four team members' servers stay consistent (same signal handling, same metrics format, same partial-write handling pattern) even though the underlying mechanism differs.
+5. **Verify AI-written code by actually running it, not just reading it.** Every deliverable (the server, the test script, the Makefile) was compiled and executed against real test cases (concurrent connections, large payloads, abrupt disconnects, signal-based shutdown) before being accepted, rather than trusted on inspection alone.
+6. **Treat a peer review as ground truth and re-verify fixes.** When a teammate's measured code review surfaced real bugs (data loss under load, an incorrect metric, a redundant syscall undermining the report's core claim), the fixes were re-verified by actually reproducing the reviewer's exact test conditions (e.g., the same 2 MiB flood test) rather than assuming a patch was correct because it looked plausible.
+7. **Use multiple AI tools for different roles.** Claude was used for the primary design/build/documentation work; Gemini and ChatGPT were used afterward to help fix specific flagged issues in the code. Gemini and ChatGPT is used to fix the code.
+
+---
