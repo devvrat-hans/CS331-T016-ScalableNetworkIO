@@ -24,6 +24,7 @@
 /code       → all source code
 /report     → final report (PDF)
 /ppt        → presentation slides (PDF or .pptx)
+/AI_Used    → AI usage documentation (tools, prompts, workflow, details)
 ```
 
 ### Task Allocation

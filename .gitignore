@@ -1,0 +1,15 @@
+# Object and binary files
+*.o
+*.out
+*.exe
+io_uring_echo_server
+
+# macOS metadata
+.DS_Store
+
+# Temporary files
+*~
+*.swp
+
+# VS Code
+.vscode/
