@@ -1,0 +1,2 @@
+run,engine,connections,workers,messages_per_connection,bytes_per_message,attempted,completed,bytes,elapsed_ns,throughput_msg_s,throughput_mib_s,mean_latency_us,min_latency_us,max_latency_us,server_threads
+1,io_uring,100,4,100,64,10000,10000,640000,1036019103,9652.332,0.589,410.107,155.917,5227.223,1
