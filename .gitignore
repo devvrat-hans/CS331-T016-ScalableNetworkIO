@@ -8,6 +8,7 @@ code/io_uring/io_uring_echo_server
 *.o
 *.out
 *.exe
+io_uring_echo_server
 
 # macOS metadata
 .DS_Store
@@ -15,3 +16,6 @@ code/io_uring/io_uring_echo_server
 # Temporary files
 *~
 *.swp
+
+# VS Code
+.vscode/
