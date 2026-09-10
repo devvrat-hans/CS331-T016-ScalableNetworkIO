@@ -53,9 +53,9 @@
 - **Component:** Benchmarking scripts & performance evaluation
 
 ### Tools & Models Used:
-- *Tool name & version:* 
-- *Platform / Interface:* 
-- *Usage scope:* 
+- *Tool name & version: ChatGPT (GPT-5.6), used as an AI-assisted coding and review tool
+- *Platform / Interface: ChatGPT Windows Application
+- *Usage scope: Bash scripting guidance, and explaining benchmarking/profiling concepts. Suggestions were manually reviewed, tested, and adapted before use.
 
 ---
 
