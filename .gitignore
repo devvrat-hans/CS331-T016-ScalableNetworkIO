@@ -1,3 +1,9 @@
+# Build executables
+code/poll/poll_echo_server
+code/select/select_echo_server
+code/epoll/epoll_echo_server
+code/io_uring/io_uring_echo_server
+
 # Object and binary files
 *.o
 *.out
