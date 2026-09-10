@@ -10,10 +10,11 @@
 
 ## Instructions for Team Members
 
-1. **Pull `main`** into your branch before writing.
-2. In each file in this directory (`01_tools.md`, `02_prompts.md`, `03_thought_process.md`, `04_step_by_step_contributions.md`), navigate to **your assigned section**.
-3. Fill in your details (tools used, prompts, thought process, and contributions).
-4. Commit your changes in your branch and push/merge back into `main`.
+1. Pull **`main`** into your branch before writing.
+2. Create a folder with your module name inside the **`AI_Usage/`** directory.
+3. Inside **AI_Usage/your_module_name/** add four files(`01_tools.md`, `02_prompts.md`, `03_thought_process.md`, `04_step_by_step_contributions.md`).
+4. Fill in the relevant details for your work (tools used, prompts, thought process, and contributions).
+5. Commit your changes in your branch and push/merge back into `main`.
 
 ---
 
@@ -32,7 +33,7 @@
 
 ## Document Index
 
-- **[01_tools.md](./01_tools.md)** — Which AI tools/models were used
-- **[02_prompts.md](./02_prompts.md)** — The prompts given to AI tools
-- **[03_thought_process.md](./03_thought_process.md)** — How AI was integrated into the workflow & decision-making
-- **[04_step_by_step_contributions.md](./04_step_by_step_contributions.md)** — Step-by-step details of where and how AI contributed
+- **01_tools.md** — Which AI tools/models were used
+- **02_prompts.md** — The prompts given to AI tools
+- **03_thought_process.md** — How AI was integrated into the workflow & decision-making
+- **04_step_by_step_contributions.md** — Step-by-step details of where and how AI contributed
