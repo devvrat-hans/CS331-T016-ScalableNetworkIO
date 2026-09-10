@@ -62,10 +62,10 @@
 
 | Stage | Where & How AI Contributed | Human Engineering & Verification |
 | :--- | :--- | :--- |
-| **1. Benchmark Design & Tool Setup** | | |
-| **2. Concurrency Load Testing** | | |
-| **3. Syscall & Profiling Metrics** | | |
-| **4. Data Analysis & Chart Generation** | | |
+| **1. Benchmark Design & Tool Setup** | Suggested the structure for a repeatable Bash benchmark and profiling setup. | Implemented the benchmark structure and selected the required tools and parameters. |
+| **2. Concurrency Load Testing** | Suggested approaches for distributing connections across multiple client workers. | Implemented worker management and verified the workload execution. |
+| **3. Syscall & Profiling Metrics** | Helped explain CPU, memory, and syscall profiling using `time` and `strace`. | Integrated the profiling tools and verified their output during test runs. |
+| **4. Data Analysis & Chart Generation** | Suggested relevant throughput and latency metrics for comparison. | Aggregated results into CSV and used the collected data for performance evaluation. |
 
 ---
 
