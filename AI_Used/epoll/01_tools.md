@@ -1,9 +1,13 @@
-## 1. Tools Used
+# AI Tools Used
 
-| Tool | Role in this component |
-|---|---|
-| **Claude (Anthropic)** | Primary tool. Used for concept explanation, task division for the 6-person team, subtask-by-subtask design and implementation of `epoll_echo_server.c`, test script and build tooling, and triage of a peer code review. |
-| **Gemini** | Used to help fix flagged code issues. |
-| **ChatGPT** | Used to help fix flagged code issues. |
+## Claude
 
----
+Claude was used throughout the project as the main assistant for understanding the project requirements and networking concepts, planning the `epoll` implementation, and developing the `epoll`-based TCP echo server. It was also used for testing, debugging, code refinement, preparing the Makefile and README, and analyzing issues found during peer review.
+
+## Gemini
+
+Gemini was mainly used as a secondary tool to help fix and cross-check issues that were identified during code review and development.
+
+## ChatGPT
+
+ChatGPT was mainly used as a secondary tool to help fix flagged issues in the code and to cross-check the implementation during development.

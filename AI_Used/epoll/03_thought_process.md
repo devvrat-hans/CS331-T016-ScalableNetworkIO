@@ -1,13 +1,30 @@
-## Thought Process — How AI Was Integrated Into the Workflow
+# Thought Process: How AI Was Integrated Into the Workflow
 
-The overall approach was **understand before building, verify before trusting**, not "generate code and submit it." Concretely:
+AI was used as a supporting tool throughout the development process, with the main approach being **understand first, implement gradually, and verify before accepting the result**.
 
-1. **Start at the conceptual foundation, not the API.** Before touching any code, I had Claude explain *why* select/poll/epoll/io_uring exist at all (the C10K problem, blocking vs non-blocking I/O, readiness vs completion models) before explaining what any specific syscall does. This matched a "why before what" learning approach throughout.
-2. **Use AI to plan team coordination, not just individual code.** Since the project is a 6-person group deliverable, I had Claude work out how to split the four-mechanism-plus-benchmarking-plus-report project into 6 genuinely parallel, non-blocking tasks, including the shared contract (port, protocol, metrics format) needed to make that parallelism actually work.
-3. **Build incrementally, one subtask at a time, understanding before coding.** Rather than asking for the whole `epoll_echo_server.c` file in one shot, the implementation was broken into 10 subtasks (socket setup -> non-blocking mode -> epoll instance creation -> per-connection state design -> event loop skeleton -> accept handling -> read/echo with partial-write handling -> cleanup -> metrics/shutdown -> testing), each explained (why it exists, what could go wrong) before any code was written for it.
-4. **Cross-reference against a teammate's working implementation.** A teammate's `poll_echo_server.c` was used as a style/structure reference so all four team members' servers stay consistent (same signal handling, same metrics format, same partial-write handling pattern) even though the underlying mechanism differs.
-5. **Verify AI-written code by actually running it, not just reading it.** Every deliverable (the server, the test script, the Makefile) was compiled and executed against real test cases (concurrent connections, large payloads, abrupt disconnects, signal-based shutdown) before being accepted, rather than trusted on inspection alone.
-6. **Treat a peer review as ground truth and re-verify fixes.** When a teammate's measured code review surfaced real bugs (data loss under load, an incorrect metric, a redundant syscall undermining the report's core claim), the fixes were re-verified by actually reproducing the reviewer's exact test conditions (e.g., the same 2 MiB flood test) rather than assuming a patch was correct because it looked plausible.
-7. **Use multiple AI tools for different roles.** Claude was used for the primary design/build/documentation work; Gemini and ChatGPT were used afterward to help fix specific flagged issues in the code. Gemini and ChatGPT is used to fix the code.
+1. **Understand the project before implementation.**  
+   AI was first used to understand the overall project requirements, the purpose of scalable network I/O, and the differences between `select`, `poll`, `epoll`, and `io_uring`. This helped build an understanding of readiness-based I/O and the specific role of `epoll`.
 
----
+2. **Understand `epoll` before writing code.**  
+   AI was used to explain the `epoll` interest list, ready list, level-triggered and edge-triggered behavior, non-blocking sockets, and how an `epoll`-based TCP echo server handles multiple clients.
+
+3. **Plan the work before implementation.**  
+   AI was used to divide the implementation into smaller subtasks so that the server could be developed incrementally. Each subtask was understood before moving to the next one instead of generating the complete implementation immediately.
+
+4. **Follow the project's existing implementation style.**  
+   A teammate's `poll_echo_server.c` was used as a reference for the overall server structure, signal handling, metrics, cleanup, and coding conventions. AI helped adapt those conventions to `epoll` without losing the behavior expected from the project.
+
+5. **Use AI for implementation and debugging.**  
+   AI was used to write and refine the `epoll` server, test script, Makefile, and README. Potential problems such as partial writes, cleanup ordering, data loss, syscall overhead, and connection handling were discussed and addressed during development.
+
+6. **Cross-check the generated work.**  
+   The implementation was not accepted simply because AI produced it. The code was compiled and tested, and different AI tools were used to cross-check specific issues. Teammate feedback and measured code-review results were also considered.
+
+7. **Verify fixes against real failure scenarios.**  
+   When peer review identified problems such as data loss under load, metric errors, syscall overhead, and port handling, the fixes were tested against the same or equivalent failure scenarios. A later rewrite was also compiled and stress-tested to identify regressions.
+
+8. **Use AI for supporting documentation.**  
+   AI was used to prepare the Makefile, README, testing script, and Markdown files documenting AI usage, while keeping the `epoll` implementation consistent with the rest of the project.
+
+9. **Perform final verification.**  
+   The final implementation was compiled, tested, reviewed, and corrected where necessary before being considered ready for integration. AI was treated as an assistance tool, while the final decisions and integration were performed by the team.
