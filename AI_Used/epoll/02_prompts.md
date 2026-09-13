@@ -42,8 +42,4 @@ The following summarizes the main prompts given to AI tools during the developme
 
 Gemini and ChatGPT were mainly used for independent verification and fixing specific issues identified during development and review. The prompts were focused on checking whether the updated implementation was correct and whether the flagged issues had been properly resolved.
 
-1. "Check whether the code is correct or not. If there are any issues, list them and explain how to solve them."
-
-2. "Review the updated epoll code and check whether the previously identified problems have been fixed."
-
-3. "Check the code for any remaining logical, compilation, or edge-case issues and suggest the required fixes."
+(Files are there in the Files folder as these are small chats)
