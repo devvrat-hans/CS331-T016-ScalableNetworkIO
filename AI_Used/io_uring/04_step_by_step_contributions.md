@@ -2,13 +2,15 @@
 
 This document records the main points during development where AI was useful. The project was developed incrementally, so AI involvement was not limited to one stage.
 
+**Note:** I asked some of the basic questions and debugging-related queries in ChatGPT's incognito tab to avoid unnecessary conversation in the main chat. The purpose was to keep the main chat focused and preserve the context of the project, while using the incognito chat for quick questions and debugging.
+
 ## 1. Understanding the existing TCP server
 
 **Tool: ChatGPT**
 
 I started by understanding the normal TCP echo server before moving to `io_uring`.
 
-I used ChatGPT to clear up questions about `accept()`, `recv()`, and `send()`, especially the difference between the listening socket and the socket returned by `accept()`.
+I used ChatGPT to clear up questions about `accept()`, `recv()`, and `send()`, 
 
 This gave me the basic flow:
 
@@ -36,7 +38,7 @@ I then used ChatGPT to understand SQEs and CQEs and how the kernel interacts wit
 
 A key question was:
 
-I understand accept/recv/send in a normal TCP server, but I'm confused about how the same flow works in io_uring. Can you explain it step by step?
+I understand accept/recv/send in a normal TCP server, but can you explain how the same flow works in io_uring?
 
 The important concept I took from this was that the application prepares and submits an operation, while the kernel performs it and reports the result through a CQE.
 
@@ -87,10 +89,6 @@ flow.
 
 After getting receive and send working, I had to understand how a completion could be connected to the correct client.
 
-I specifically asked:
-
-I have the recv and send working now. Can you explain what user_data is doing here and why we need it?
-
 I then used `user_data` to associate operations with the relevant client structure.
 
 The client structure keeps the socket, buffer, operation state, and send progress.
@@ -101,9 +99,9 @@ This allowed different clients to maintain independent state while still being h
 
 **Tool: ChatGPT**
 
-I asked what happens if a send operation does not transmit the complete buffer.
+What happens if a send operation does not transmit the complete buffer.
 
-The implementation was changed to keep track of the send position and remaining length.
+The implementation it gave was keeping track of the send position and remaining length.
 
 Conceptually:
 
@@ -119,26 +117,8 @@ Send remaining 40 bytes
 
 This avoided assuming that a single send completion always means the entire response has been transmitted.
 
-## 7. Simplifying operation management
 
-**Tool: ChatGPT**
-
-I discussed whether a separate dynamically allocated operation structure was necessary for every I/O request.
-
-Since the implementation maintains at most one outstanding client I/O operation at a time, I kept the operation state directly in the client structure.
-
-This simplified the lifetime relationship between:
-
-```text
-client
-buffer
-operation
-CQE
-```
-
-and avoided unnecessary allocation for every operation.
-
-## 8. Claude code review
+## 7. Claude code review
 
 **Tool: Claude**
 
@@ -157,9 +137,9 @@ The review pointed out several areas worth considering, including:
 
 This review was useful mainly because it gave me another perspective on the implementation.
 
-## 9. Evaluating the review instead of applying everything
+## 8. Evaluating the review instead of applying everything
 
-**Tool: ChatGPT + Claude**
+**Tool: ChatGPT**
 
 I then discussed the suggestions and separated them into things that were important for the project and things that were optional optimizations.
 
@@ -178,7 +158,7 @@ For example, command-line port support was not necessary for the project, and I 
 
 This was one of the main points where AI was used for **decision support rather than direct code generation**.
 
-## 10. Adding multishot accept
+## 9. Adding multishot accept
 
 **Tool: ChatGPT**
 
@@ -210,36 +190,7 @@ The resulting idea is:
              CQE   CQE   CQE
 ```
 
-## 11. Batching completions
-
-**Tool: ChatGPT**
-
-I also discussed why processing only one CQE at a time could add unnecessary overhead.
-
-The event loop was changed to use:
-
-```c
-io_uring_submit_and_wait(&ring, 1);
-```
-
-and then process all currently available CQEs.
-
-The idea was:
-
-```text
-Submit / Wait
-     ↓
-CQE 1
-CQE 2
-CQE 3
-CQE 4
-     ↓
-Process available completions
-```
-
-This was particularly relevant because the project is intended to compare the behaviour of different network I/O mechanisms under load.
-
-## 12. Removing per-message logging
+## 11. Removing per-message logging
 
 **Tool: ChatGPT + Claude**
 
@@ -249,7 +200,7 @@ I removed the per-message logging from the main I/O path.
 
 The goal was to make the benchmark measure the I/O implementation rather than terminal output.
 
-## 13. Graceful shutdown
+## 12. Graceful shutdown
 
 **Tool: ChatGPT**
 
@@ -259,7 +210,7 @@ The server can therefore be stopped with `Ctrl+C` while still performing its nor
 
 The cleanup includes closing client sockets, freeing client structures, destroying the io_uring instance, and closing the listening socket.
 
-## 14. Runtime statistics
+## 13. Runtime statistics
 
 **Tool: ChatGPT**
 
@@ -285,7 +236,7 @@ STAT connections=... recv_ops=... send_ops=... zero_byte_recv=... total_cqes=...
 
 This makes the output easier to process in scripts or compare between runs.
 
-## 15. Makefile and build debugging
+## 14. Makefile and build debugging
 
 **Tool: ChatGPT**
 
@@ -305,7 +256,7 @@ The final compilation command correctly includes:
 -luring
 ```
 
-## 16. Verifying the single-threaded design
+## 15. Verifying the single-threaded design
 
 **Tool: ChatGPT**
 
@@ -325,7 +276,7 @@ NLWP = 1
 
 This confirms that multiple clients are being handled by the same server thread rather than by creating additional worker threads.
 
-## 17. README and final documentation
+## 16. README and final documentation
 
 **Tool: ChatGPT**
 
