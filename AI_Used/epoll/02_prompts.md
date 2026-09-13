@@ -38,7 +38,7 @@ The following summarizes the main prompts given to AI tools during the developme
 
 17. "[Pasted a teammate's code review with specific measured bugs] Is this correct now?" followed by an updated version of the code: "This is updated code. Is this correct now?"
 
-## Gemini and ChatGPT
+## Gemini and ChatGPT (Files are also attached as these are small chats)
 
 Gemini and ChatGPT were mainly used for independent verification and fixing specific issues identified during development and review. The prompts were focused on checking whether the updated implementation was correct and whether the flagged issues had been properly resolved.
 
