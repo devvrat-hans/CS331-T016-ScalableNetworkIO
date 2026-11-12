@@ -1,10 +1,5 @@
 # Epoll echo server evolution
 
-**Created:** 11/5/2026 21:24:30  
-**Updated:** 11/5/2026 21:33:13  
-**Exported:** 11/5/2026 21:33:46  
-**Link:** [https://claude.ai/chat/9511bcca-0f67-4fe4-b0c4-7a0ac658bbd3](https://claude.ai/chat/9511bcca-0f67-4fe4-b0c4-7a0ac658bbd3)  
-
 ## User:
 
 > File: epoll_echo_server_v1.c
