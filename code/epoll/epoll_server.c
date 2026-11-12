@@ -1,6 +1,6 @@
 /*
  * epoll_server.c - the epoll engine.
- * Only the event loop lives here; see common/framework.h for the contract.
+ * Only the event loop lives here; see Chirag/code/common/framework.h for the contract.
  *
  * --epoll-mode lt (default): level-triggered. One I/O step per reported event;
  * the interest set is changed with EPOLL_CTL_MOD whenever a client switches
@@ -11,7 +11,7 @@
  * must keep going until the kernel says EAGAIN, or data would be left stranded.
  */
 #define _GNU_SOURCE
-#include "../common/framework.h"
+#include "framework.h" /* Chirag/code/common/framework.h; the Makefile adds -I */
 
 #include <errno.h>
 #include <sys/epoll.h>
@@ -43,7 +43,7 @@ static void drop(server_t *s, int epfd, conn_t *c, int rc)
 static void handle_level(server_t *s, int epfd, conn_t *c)
 {
     int was_reading = conn_is_reading(c);
-    int rc = conn_step(c, NULL);
+    int rc = conn_progress(c);
     if (rc) {
         drop(s, epfd, c, rc);
     } else if (was_reading != conn_is_reading(c)) {
@@ -63,10 +63,9 @@ static void handle_level(server_t *s, int epfd, conn_t *c)
  * would block. This is how event-driven servers usually avoid epoll_ctl. */
 static void handle_direct(server_t *s, int epfd, conn_t *c)
 {
-    int rc = conn_step(c, NULL);
+    int rc = conn_progress(c);
     if (!rc && !conn_is_reading(c) && !c->interest_out) {
-        int would_block = 0;
-        rc = conn_step(c, &would_block);
+        rc = conn_progress(c);
     }
     if (rc) {
         drop(s, epfd, c, rc);
