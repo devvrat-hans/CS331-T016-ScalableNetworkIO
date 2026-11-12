@@ -1,74 +1,178 @@
-# Epoll Workload Server
+# epoll Network I/O Engine
 
-**Author:** Patil Nachiket Kiran (Roll No: 24110250)  
-**Course:** CS331 - Scalable Network I/O (Team T016)
+## 1. Overview
 
-Standalone single-threaded TCP server using `epoll()` for I/O multiplexing. It serves three workloads (small echo, verified upload, verified download) over one length-prefixed protocol, and prints a JSON summary of its statistics on exit.
+This component implements the `epoll`-based network I/O engine for the CS331 project, **Scalable Network I/O: From select to io_uring**.
 
-## Build
+The implementation uses the Linux `epoll` interface to perform readiness-based event-driven network I/O. It supports both TCP and UDP transports and integrates with the project's shared networking framework.
+
+The engine supports three operating modes:
+
+- **Level-triggered (`lt`, default):** One I/O step per reported event; the interest set is switched between read and write as the connection changes state.
+- **Level-triggered with direct send (`lt-direct`):** Level-triggered, but replies are sent immediately after a request completes instead of waiting for an `EPOLLOUT` event.
+- **Edge-triggered (`et`):** Each socket is registered once for both directions and drained until the kernel reports `EAGAIN`.
+
+## 2. Implementation Structure
+
+The implementation is contained in:
+
+```text
+code/epoll/epoll_server.c
+```
+
+The engine follows the shared project architecture:
+
+- **Engine:** Owns the epoll instance and the event loop, and decides when to issue I/O steps.
+- **Framework:** Manages connection state, request processing, application callbacks, statistics and shutdown.
+- **Application plugins:** Define the request and response behavior independently of the I/O engine.
+
+The engine implements the framework interface:
+
+```c
+int engine_run(server_t *s);
+```
+
+Only the event loop lives in this file. Reading, writing and request state-machine logic are provided by the framework (`conn_step()`, `conn_is_reading()`, `conn_close()`, `accept_ready()`, `udp_drain()`).
+
+## 3. Epoll Setup and Configuration
+
+| Parameter | Value | Purpose |
+|---|---:|---|
+| `EVENT_BATCH` | 256 | Maximum events returned by one `epoll_wait()` call |
+| `WAIT_MS` | framework-defined | `epoll_wait()` timeout, so the loop can notice a stop request |
+
+`engine_run()` creates the epoll instance with `epoll_create1(EPOLL_CLOEXEC)` and registers the listening socket (`s->listener`) with `EPOLL_CTL_ADD`.
+
+- The listening socket is identified in event data by a `NULL` pointer (`data.ptr = NULL`); every client connection stores its `conn_t` pointer in `data.ptr`.
+- For UDP in edge-triggered mode, the socket is registered with `EPOLLET`; otherwise it is registered with `EPOLLIN` only.
+
+After setup, `server_ready()` is called to signal the framework that the engine is accepting traffic.
+
+## 4. Event Loop
+
+The main loop runs until `stop_requested` is set:
+
+1. Increment the loop-iteration and wait counters.
+2. Call `epoll_wait()` with up to `EVENT_BATCH` events and the `WAIT_MS` timeout.
+3. Retry on `EINTR`; any other error ends the loop and is returned.
+4. Dispatch each returned event according to transport and mode.
+
+Dispatch order for each event:
+
+| Condition | Handler |
+|---|---|
+| UDP transport | `udp_drain()` |
+| `data.ptr == NULL` (listener) | `accept_ready()` with the `remember()` callback |
+| Edge-triggered mode | `handle_edge()` |
+| Level-triggered with direct send | `handle_direct()` |
+| Level-triggered (default) | `handle_level()` |
+
+## 5. TCP Implementation
+
+### Connection acceptance
+
+When the listener is ready, the engine calls the framework's `accept_ready()`, passing the `remember()` callback.
+
+For each newly accepted connection, `remember()` registers the socket with epoll using `EPOLL_CTL_ADD`:
+
+- Level-triggered modes register `EPOLLIN` (every connection starts by reading).
+- Edge-triggered mode registers `EPOLLIN | EPOLLOUT | EPOLLET` once, for the lifetime of the connection.
+
+If registration fails, the connection is closed through `conn_close()`.
+
+### Removing connections
+
+`drop()` removes a connection with `EPOLL_CTL_DEL` and then calls `conn_close()` with the error or closure code. It is used by every handler whenever `conn_step()` reports a closure or error, or when an `epoll_ctl()` call fails.
+
+### Level-triggered mode (`handle_level()`)
+
+Each reported event performs exactly one `conn_step()`.
+
+- If the step fails or the peer closes, the connection is dropped.
+- If the connection switched between reading and writing, the interest set is updated with `EPOLL_CTL_MOD` (`EPOLLIN` when reading, `EPOLLOUT` when sending).
+
+This costs one `epoll_ctl()` call per direction change, i.e. roughly two per request/response exchange.
+
+### Level-triggered mode with direct send (`handle_direct()`)
+
+This mode removes most of the `epoll_ctl()` calls.
+
+- After a step, if the request is complete and the connection is not already waiting for writability (`c->interest_out` is clear), the reply is sent immediately with a second `conn_step()`.
+- A small reply normally fits in the socket send buffer, so the interest set stays at `EPOLLIN`.
+- Only when a send would block does the engine switch to `EPOLLOUT` with `EPOLL_CTL_MOD`, recording this in `c->interest_out`. It switches back to `EPOLLIN` once the reply has been fully sent.
+
+### Edge-triggered mode (`handle_edge()`)
+
+An edge is reported only when readiness changes, so the handler must make progress until the kernel says it cannot.
+
+- `conn_step()` is called in a loop with a `would_block` flag.
+- The loop exits when `would_block` is set; the next edge brings the connection back.
+- On error or closure, the connection is dropped.
+
+Because the socket is registered once for both directions, there are no `EPOLL_CTL_MOD` calls after registration.
+
+## 6. UDP Implementation
+
+UDP uses a single socket (the listener), so every event is dispatched to the framework's `udp_drain()`.
+
+- **Level-triggered:** `udp_drain()` is called once per reported event.
+- **Edge-triggered:** `udp_drain()` is called repeatedly until it returns a non-zero value or a stop is requested, so no datagrams are left stranded after an edge.
+- A negative return value is treated as a fatal error and ends the loop.
+
+Datagram parsing, application handling and replies are handled by the framework.
+
+## 7. Shutdown and Resource Management
+
+- The loop exits when `stop_requested` is set. Because `epoll_wait()` uses a timeout, the flag is observed within one `WAIT_MS` period even when the server is idle.
+- Fatal errors from `epoll_wait()`, `accept_ready()` or `udp_drain()` jump to a common exit path and are returned as the result.
+- The epoll file descriptor is closed on exit. Unlike an asynchronous engine, epoll has no outstanding kernel-side operations, so no drain phase is required.
+
+## 8. Performance-Related Features
+
+- **Event batching:** Up to 256 ready events are handled per `epoll_wait()` call.
+- **Scalable readiness tracking:** The kernel returns only ready descriptors, so cost does not grow with the number of idle connections (unlike `select`/`poll`).
+- **Reduced `epoll_ctl()` traffic:**
+  - `lt-direct` avoids interest-set changes unless a send would block.
+  - `et` registers each socket once for both directions.
+- **Edge-triggered draining:** Handles a connection until `EAGAIN`, avoiding repeated wake-ups for the same connection.
+
+## 9. Statistics and Instrumentation
+
+The engine contributes to the framework's statistics and syscall counters:
+
+| Counter | Meaning |
+|---|---|
+| `loop_calls` | Event-loop iterations |
+| `sc_wait` | `epoll_wait()` calls |
+| `sc_ctl` | `epoll_ctl()` calls (ADD, MOD and DEL) |
+
+The framework additionally tracks bytes read and written, and accepted, closed and rejected connections, and uses all of these for reporting and performance comparison across engines.
+
+## 10. Dependencies and Integration
+
+The implementation requires:
+
+- Linux with `epoll` support (introduced in Linux 2.6).
+- GCC or a compatible C compiler (`_GNU_SOURCE` is defined).
+- The project's shared `framework.h` and `framework.c` components.
+
+No additional libraries are required.
+
+The epoll engine is compiled and linked as part of the project's shared build system. From the integrated repository:
+
 ```bash
-gcc -O2 -Wall -Wextra -o epoll_server epoll_server_v2.c
+cd code/benchmark
+make
 ```
-No project header or other C file is needed.
 
-## Run
-```bash
-./epoll_server [--port 9090] [--bind 127.0.0.1] [--app echo|upload|download] [--max-clients 10000]
-```
-The server listens on `127.0.0.1:9090` by default and prints `READY <port>` once it is accepting connections. Use `--port 0` to let the kernel choose a free port. Press `Ctrl+C` (or send `SIGTERM`) to stop it; it then closes all clients and prints one JSON line of statistics.
+Relevant epoll options:
 
-## Testing
-`nc` cannot send the binary length header, so use a short Python client. Every request starts with an 8-byte big-endian payload length.
+| Option | Description |
+|---|---|
+| `--epoll-mode lt` | Level-triggered (default) |
+| `--epoll-mode et` | Edge-triggered |
+| (direct-send option) | Enables `lt-direct`, i.e. `config->epoll_direct` |
 
-```python
-import socket, struct
+The engine is designed to operate within the common framework so that the same application plugins and protocol handling can be used across the different network I/O implementations.
 
-def connect(port=9090):
-    return socket.create_connection(("127.0.0.1", port))
-
-def recv_exact(s, n):
-    buf = b""
-    while len(buf) < n:
-        chunk = s.recv(n - len(buf))
-        if not chunk:
-            raise EOFError("closed early")
-        buf += chunk
-    return buf
-
-pattern = lambda n, off=0: bytes((off + i) % 251 for i in range(n))
-
-# echo     (start server with --app echo)
-s = connect(); s.sendall(struct.pack(">Q", 5) + b"hello")
-print(recv_exact(s, 5))
-
-# upload   (start server with --app upload)
-s = connect(); s.sendall(struct.pack(">Q", 10000) + pattern(10000))
-print(recv_exact(s, 1))            # b'K' means every byte was verified
-
-# download (start server with --app download)
-s = connect(); s.sendall(struct.pack(">Q", 10000))
-assert recv_exact(s, 10000) == pattern(10000)
-```
-A wrong byte in an upload, or an oversized header, makes the server close that connection and count it under `errors` in the JSON line.
-
-## How It Works
-- Uses `epoll` (level-triggered) to monitor multiple sockets concurrently in a single thread.
-- The listening socket and accepted client sockets are non-blocking (`SOCK_NONBLOCK` via `accept4()`), and `TCP_NODELAY` is set on each client.
-- Each request begins with an 8-byte big-endian length (non-zero, at most 64 MiB, and at most 4096 bytes for echo). **Echo** receives the payload and sends it back. **Upload** receives it in 4096-byte chunks, checks every byte equals `(offset + i) % 251`, and replies with a single `'K'` only if all bytes matched. **Download** sends `length` bytes of the same pattern. After each request the connection goes back to the header stage and can be reused.
-- Each client is a small state machine (`HEADER`, `RECEIVE`, `SEND`, `ACK`). One `recv()` or `send()` is done per event, and partial reads or writes simply continue on the next event.
-- Interest is `EPOLLIN` while a client is reading and `EPOLLOUT` while it is sending; `EPOLL_CTL_MOD` is called only when the direction changes, not on every event.
-- When new connections arrive, an `accept4()` loop drains up to 64 pending handshakes per wakeup, so a burst of new connections can't starve already-connected clients within the same `epoll_wait` cycle.
-- Per-client state (`client_t`) is heap-allocated; `epoll_event.data.ptr` points directly at it, and `NULL` identifies the listener, so there is no separate fd-to-state lookup table to keep in sync.
-- A connection is removed via `EPOLL_CTL_DEL` before its fd is closed and its `client_t` freed.
-- A small intrusive doubly linked list of live clients is kept solely so shutdown can walk and close every still-open connection cleanly; it is never scanned for I/O.
-- `epoll_wait` uses a 100 ms timeout, so the stop flag set by `SIGINT`/`SIGTERM` is noticed promptly. `SIGPIPE` is avoided with `MSG_NOSIGNAL` on every `send()`.
-- On shutdown one JSON line is printed with: accepted, closed, peak, rejected, errors and incomplete connections, completed messages, bytes read and written on the wire, `epoll_wait` call count, elapsed time, user and system CPU time, and peak memory (`VmHWM` from `/proc/self/status`). The same fields are reported by the other engines so results can be compared.
-
-## Limitations
-- `epoll_wait` returns only the ready descriptors, so per-call cost is proportional to the number of *ready* fds, not the number watched; registering/deregistering a fd (`epoll_ctl`) is still a per-fd operation, paid at connect/disconnect time and whenever a client switches between reading and sending.
-- Level-triggered mechanism only (re-notifies on every `epoll_wait` cycle if data is unread); an edge-triggered (`EPOLLET`) variant is a possible extension but requires draining each fd to `EAGAIN` on every notification.
-- Only one `recv()` or `send()` per event, so large transfers take more `epoll_wait` cycles; this keeps the behavior identical across engines.
-- Any accept error other than `EAGAIN`/`EINTR` (including `EMFILE`) stops the event loop and the summary reports `server_ok:false`; there is no reserved-fd workaround.
-- One workload per server process (chosen with `--app`), IPv4 only, and `--bind` must be a numeric address.
-- Linux-specific (`epoll` is not portable to other POSIX systems, unlike `select`/`poll`).
-- The connection ceiling is `--max-clients` (at most 100000; extra connections are closed and counted as `rejected`) and the system open file descriptor limit (`ulimit -n`).
+---
