@@ -27,7 +27,7 @@ import shutil
 import statistics
 import multiprocessing
 
-ROOT = Path(__file__).resolve().parent  # Chirag/code: bin/ and build/ live here
+ROOT = Path(__file__).resolve().parent  # code/benchmark: bin/ and build/ live here
 ENGINES = ("select", "poll", "epoll", "io_uring")
 APPS = ("echo", "upload", "download")
 MAX_TRANSFER = 64 * 1024 * 1024
@@ -557,10 +557,10 @@ def source_hashes():
 
 def check_consistency():
     """These helpers must remain equal even though the four programs are standalone."""
-    # Legacy v4 check (standalone servers); the v5 servers share Chirag/code/common.
-    team = ROOT.parents[1]
-    paths = {"select": team / "Parth/code/select_server.c", "poll": team / "Devvrat/code/poll_server.c",
-             "epoll": team / "Nachiket/code/epoll_server.c", "io_uring": team / "Niraj/code/io_uring_server.c"}
+    # Legacy v4 check (standalone servers); the v5 servers share code/benchmark/common.
+    code = ROOT.parent
+    paths = {"select": code / "select/select_server.c", "poll": code / "poll/poll_server.c",
+             "epoll": code / "epoll/epoll_server.c", "io_uring": code / "io_uring/io_uring_server.c"}
     texts = [path.read_text() for path in paths.values()]
     names = ("handle_signal", "next_header", "client_add", "client_close", "client_is_reading",
              "client_buffer", "client_length", "prepare_chunk", "client_complete", "number",
