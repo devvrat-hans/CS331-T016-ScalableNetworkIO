@@ -7,7 +7,7 @@
     python3 experiments.py check-counters --out results/counter-check
 
 An experiment is only data (a SUITES entry). Network applications are plugins
-selected by name, so adding one means adding a table in common/apps.c (Chirag/code) and a
+selected by name, so adding one means adding a table in common/apps.c (code/benchmark) and a
 suite here; nothing in this runner or in any engine is specific to one of them.
 """
 import argparse
@@ -26,7 +26,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent  # Chirag/code: bin/ and build/ live here
+ROOT = Path(__file__).resolve().parent  # code/benchmark: bin/ and build/ live here
 BASE = ["select", "poll", "epoll", "io_uring"]
 ALL_VARIANTS = BASE + ["epoll-et", "epoll-lt-direct", "io_uring-sqpoll", "io_uring-sqpoll-busy"]
 # io_uring keeps --udp-depth receives waiting on the one UDP socket. No single
